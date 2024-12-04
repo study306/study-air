@@ -276,91 +276,133 @@ sampling_filtering_example_3 = '''
 import numpy as np
 import matplotlib.pyplot as plt
 
-g = 9.81
+def inverse_kinematics_3dof(x, y, theta_total, l1, l2, l3):
+    """
+    Calculates the joint angles for a 3-DOF robot arm to reach a given target point.
 
-m1 = float(input("Enter mass of Link 1 (kg): "))
-m2 = float(input("Enter mass of Link 2 (kg): "))
-m_load = float(input("Enter mass of Load (kg): "))
-L1 = float(input("Enter length of Link 1 (m): "))
-L2 = float(input("Enter length of Link 2 (m): "))
+    Args:
+        x: The x-coordinate of the target point.
+        y: The y-coordinate of the target point.
+        theta_total: The total angle of the end-effector with respect to the base.
+        l1: Length of the first link.
+        l2: Length of the second link.
+        l3: Length of the third link.
 
-thetal_range = np.linspace(0, 180, 180)
-theta2_range = np.linspace(0, 180, 180)
+    Returns:
+        A tuple containing the joint angles (theta1, theta2, theta3).
+    """
+    # Calculate the distance from the origin to the target point
+    d = np.sqrt(x**2 + y**2)
 
-taul_values = []
-tau2_values = []
-Fg1_values = []
-Fg2_values = []
-F_ext_values = []
+    # Check if the target is reachable
+    if d > l1 + l2 + l3 or d < abs(l1 - (l2 + l3)):
+        raise ValueError(f"Target is out of reach. The arm can reach between {abs(l1 - (l2 + l3)):.2f} and {l1 + l2 + l3:.2f} units.")
 
-def calculate_forces_and_torques(thetal, theta2):
+    # Calculate the angle between the x-axis and the line connecting the origin to the target point
+    alpha = np.arctan2(y, x)
 
-    thetal_rad = np.radians(thetal)
-    theta2_rad = np.radians(theta2)
+    # Calculate the distance to the point that excludes the third link
+    d_reduced = d - l3
 
-    Fg1 = m1 * g
-    Fg2 = m2 * g
-    F_ext = m_load * g
+    # Calculate the angle between the first link and the line connecting the origin to the reduced target point
+    beta = np.arccos((l1**2 + d_reduced**2 - l2**2) / (2 * l1 * d_reduced))
 
-    tau2 = Fg2 * (L2 / 2) * np.sin(theta2_rad) + F_ext * L2 * np.sin(theta2_rad)
+    # Joint angles:
+    # Theta1
+    theta1 = alpha - beta
 
-    taul = (
-        Fg1 * (L1 / 2) * np.sin(thetal_rad)
-        + Fg2 * L1 * np.sin(thetal_rad)
-        + Fg2 * (L2 / 2) * np.sin(thetal_rad + theta2_rad)
-        + F_ext * (L1 + L2) * np.sin(thetal_rad + theta2_rad)
-    )
+    # Theta2 (the second joint angle depends on the total angle and the calculated theta1)
+    theta2 = np.arctan2(y - l1*np.sin(theta1), x - l1*np.cos(theta1)) - theta1
 
-    return Fg1, Fg2, F_ext, taul, tau2
+    # Theta3 (the total angle minus the angles for the first two joints)
+    theta3 = theta_total - (theta1 + theta2)
 
-for thetal in thetal_range:
-    for theta2 in theta2_range:
-        Fg1, Fg2, F_ext, taul, tau2 = calculate_forces_and_torques(thetal, theta2)
-        Fg1_values.append(Fg1)
-        Fg2_values.append(Fg2)
-        F_ext_values.append(F_ext)
-        taul_values.append(taul)
-        tau2_values.append(tau2)
+    return theta1, theta2, theta3
 
-taul_values = np.array(taul_values)
-tau2_values = np.array(tau2_values)
-Fg1_values = np.array(Fg1_values)
-Fg2_values = np.array(Fg2_values)
-F_ext_values = np.array(F_ext_values)
+# Set link lengths to cover a range up to 10 units
+l1 = 3.33  # Length of the first link
+l2 = 3.33  # Length of the second link
+l3 = 3.33  # Length of the third link
 
-plt.figure(figsize=(12, 10))
+# Maximum and minimum reach
+max_reach = l1 + l2 + l3
+min_reach = abs(l1 - (l2 + l3))
 
-plt.subplot(2, 2, 1)
-plt.plot(thetal_range, taul_values[:len(thetal_range)], label=r'$\tau_1$ (Torque at Joint 1)')
-plt.xlabel(r'$\theta_1$ (degrees)')
-plt.ylabel("Torque (Nm)")
-plt.title("Torque at Joint 1 vs. Joint Angle")
-plt.legend()
+# Display input ranges to guide the user
+print(f"The robot arm can reach between {min_reach:.2f} and {max_reach:.2f} units from the base.")
+print("Please provide target coordinates within this range.")
+print(f"Note: The end-effector angle should be between -180 and 180 degrees.")
 
-plt.subplot(2, 2, 2)
-plt.plot(thetal_range, Fg1_values[:len(thetal_range)], label=r'$F_{g1}$ (Force on Link 1)')
-plt.xlabel(r'$\theta_1$ (degrees)')
-plt.ylabel('Force (N)')
-plt.title('Gravitational Force on Link 1 vs. Joint Angle')
-plt.legend()
+# Get user input for the target coordinates and angle
+while True:
+    try:
+        x = float(input(f"Enter the x-coordinate of the target point (range: {-max_reach} to {max_reach}): "))
+        y = float(input(f"Enter the y-coordinate of the target point (range: {-max_reach} to {max_reach}): "))
+        theta_total_deg = float(input("Enter the total angle of the end-effector with respect to the base (in degrees, range: -180 to 180): "))
 
-plt.subplot(2, 2, 3)
-plt.plot(theta2_range, tau2_values[:len(theta2_range)], label=r'$\tau_2$ (Torque at Joint 2)')
-plt.xlabel(r'$\theta_2$ (degrees)')
-plt.ylabel("Torque (Nm)")
-plt.title("Torque at Joint 2 vs. Joint Angle")
-plt.legend()
+        # Convert theta_total to radians
+        theta_total = np.radians(theta_total_deg)
 
-plt.subplot(2, 2, 4)
-plt.plot(theta2_range, Fg2_values[:len(theta2_range)], label=r'$F_{g2}$ (Force on Link 2)')
-plt.plot(theta2_range, F_ext_values[:len(theta2_range)], label=r'$F_{\text{ext}}$ (Force on Load)')
-plt.xlabel(r'$\theta_2$ (degrees)')
-plt.ylabel('Force (N)')
-plt.title('Gravitational Forces on Link 2 and Load vs. Joint Angle')
-plt.legend()
+        # Check if the input is within valid range
+        d = np.sqrt(x**2 + y**2)
+        if d > max_reach or d < min_reach:
+            raise ValueError(f"Target is out of reach. Please enter coordinates between {min_reach:.2f} and {max_reach:.2f} units.")
+        if not (-180 <= theta_total_deg <= 180):
+            raise ValueError("Angle out of range. Please enter an angle between -180 and 180 degrees.")
 
-plt.tight_layout()
-plt.show()
+        # If input is valid, break the loop
+        break
+    except ValueError as e:
+        print(f"Invalid input: {e}. Please try again.")
+
+# Calculate the joint angles
+try:
+    theta1, theta2, theta3 = inverse_kinematics_3dof(x, y, theta_total, l1, l2, l3)
+
+    # Convert the joint angles to degrees for easier interpretation
+    theta1_deg = np.degrees(theta1)
+    theta2_deg = np.degrees(theta2)
+    theta3_deg = np.degrees(theta3)
+
+    # Display the results
+    print(f"Joint angle θ1: {theta1_deg:.2f} degrees")
+    print(f"Joint angle θ2: {theta2_deg:.2f} degrees")
+    print(f"Joint angle θ3: {theta3_deg:.2f} degrees")
+
+    # Calculate the position of each joint
+    x1 = l1 * np.cos(theta1)
+    y1 = l1 * np.sin(theta1)
+    x2 = x1 + l2 * np.cos(theta1 + theta2)
+    y2 = y1 + l2 * np.sin(theta1 + theta2)
+    x3 = x2 + l3 * np.cos(theta1 + theta2 + theta3)
+    y3 = y2 + l3 * np.sin(theta1 + theta2 + theta3)
+
+    # Display the joint positions
+    print(f"Position of joint 1: ({x1:.2f}, {y1:.2f})")
+    print(f"Position of joint 2: ({x2:.2f}, {y2:.2f})")
+    print(f"Position of end-effector: ({x3:.2f}, {y3:.2f})")
+
+    # Plot the robot arm
+    plt.figure(figsize=(6, 6))
+    plt.grid(True, which='both', linestyle='--', linewidth=0.5)
+    plt.minorticks_on()
+    plt.plot([0, x1], [0, y1], 'r-', linewidth=3, label='Link 1')  # First link
+    plt.plot([x1, x2], [y1, y2], 'g-', linewidth=3, label='Link 2')  # Second link
+    plt.plot([x2, x3], [y2, y3], 'b-', linewidth=3, label='Link 3')  # Third link
+    plt.plot(x, y, 'bo', markersize=8, label='Target Point')  # Target point
+    plt.scatter([0, x1, x2, x3], [0, y1, y2, y3], c='k', zorder=5)  # Joint positions
+    plt.xlabel('X')
+    plt.ylabel('Y')
+    plt.title('Inverse Kinematics of a 3-DOF Robot Arm')
+    plt.xlim([-10, 10])
+    plt.ylim([-10, 10])
+    plt.xticks(np.arange(-10, 11, 1))
+    plt.yticks(np.arange(-10, 11, 1))
+    plt.legend()
+    plt.show()
+
+except ValueError as e:
+    print(e)
 '''
 
 ros_set_up = '''
