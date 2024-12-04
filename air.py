@@ -56,60 +56,89 @@ import numpy as np
 import matplotlib.pyplot as plt
 
 def inverse_kinematics(x, y, theta_total, l1, l2):
+    """
+    Calculates the joint angles for a 2-DOF robot arm to reach a given target point.
 
+    Args:
+        x: The x-coordinate of the target point.
+        y: The y-coordinate of the target point.
+        theta_total: The total angle of the end-effector with respect to the base.
+        l1: Length of the first link.
+        l2: Length of the second link.
+
+    Returns:
+        A tuple containing the joint angles (theta1, theta2).
+    """
+    # Calculate the distance from the origin to the target point
     d = np.sqrt(x**2 + y**2)
 
-    if d > l1 + l2:
-        raise ValueError("No solution: the given target is unreachable.")
-    if d < abs(l1 - l2):
-        raise ValueError("No solution: the given target is inside the dead zone.")
+    # Check if the target is reachable
+    if d > l1 + l2 or d < abs(l1 - l2):
+        raise ValueError("Target is out of reach for the robot arm.")
 
+    # Calculate the angle between the x-axis and the line connecting the origin to the target point
     alpha = np.arctan2(y, x)
-    beta = np.arccos((l1**2 + d**2 - l2**2) / (2 * l1 * d))
-    theta1 = alpha + beta
 
-    gamma = np.arccos((l1**2 + l2**2 - d**2) / (2 * l1 * l2))
-    theta2 = np.pi - gamma
+    # Calculate the angle between the first link and the line connecting the origin to the target point
+    beta = np.arccos((l1**2 + d**2 - l2**2) / (2 * l1 * d))
+
+    # Calculate theta1 using the given total angle
+    theta1 = alpha - beta
+
+    # Calculate theta2 based on the total angle of the end-effector with respect to the base
+    theta2 = theta_total - theta1
 
     return theta1, theta2
 
+# Get input from the user
 x = float(input("Enter the x-coordinate of the target point: "))
 y = float(input("Enter the y-coordinate of the target point: "))
 theta_total_deg = float(input("Enter the total angle of the end-effector with respect to the base (in degrees): "))
-l1 = float(input("Enter the length of the first link: "))
-l2 = float(input("Enter the length of the second link: "))
 
+# Convert theta_total to radians
 theta_total = np.radians(theta_total_deg)
 
+# Link lengths
+l1 = 1  # Length of the first link
+l2 = 1  # Length of the second link
+
+# Calculate the joint angles
 try:
     theta1, theta2 = inverse_kinematics(x, y, theta_total, l1, l2)
 
+    # Convert the joint angles to degrees for easier interpretation
     theta1_deg = np.degrees(theta1)
     theta2_deg = np.degrees(theta2)
 
+    # Display the results
     print(f"Joint angle θ1: {theta1_deg:.2f} degrees")
     print(f"Joint angle θ2: {theta2_deg:.2f} degrees")
 
+    # Calculate the position of each joint
     x1 = l1 * np.cos(theta1)
     y1 = l1 * np.sin(theta1)
-    x2 = x1 + l2 * np.cos(theta1 + theta2)
-    y2 = y1 + l2 * np.sin(theta1 + theta2)
+    x2 = x1 + l2 * np.cos(theta_total)
+    y2 = y1 + l2 * np.sin(theta_total)
 
-    print(f"Position of joint 2: ({x1:.2f}, {y1:.2f})")
+    # Display the joint positions
+    print(f"Position of joint 1: ({x1:.2f}, {y1:.2f})")
     print(f"Position of end-effector: ({x2:.2f}, {y2:.2f})")
 
+    # Plot the robot arm
     plt.figure(figsize=(6, 6))
     plt.grid(True, which='both', linestyle='--', linewidth=0.5)
     plt.minorticks_on()
-    plt.plot([0, x1], [0, y1], 'r', linewidth=3, label='Link 1')
-    plt.plot([x1, x2], [y1, y2], 'b', linewidth=3, label='Link 2')
-    plt.scatter([0, x1, x2], [0, y1, y2], c=['black', 'blue', 'green'], zorder=5)
-    plt.scatter(x, y, c='red', marker='x', label='Target Point', zorder=5)
+    plt.plot([0, x1], [0, y1], 'r-', linewidth=3, label='Link 1')  # First link
+    plt.plot([x1, x2], [y1, y2], 'g-', linewidth=3, label='Link 2')  # Second link
+    plt.plot(x, y, 'bo', markersize=8, label='Target Point')  # Target point
+    plt.scatter([0, x1, x2], [0, y1, y2], c='k', zorder=5)  # Joint positions
     plt.xlabel('X')
     plt.ylabel('Y')
     plt.title('Inverse Kinematics of a 2-DOF Robot Arm')
-    plt.xlim([-l1 - l2 - 1, l1 + l2 + 1])
-    plt.ylim([-l1 - l2 - 1, l1 + l2 + 1])
+    plt.xlim([-2, 2])
+    plt.ylim([-2, 2])
+    plt.xticks(np.arange(-2, 2.5, 0.5))
+    plt.yticks(np.arange(-2, 2.5, 0.5))
     plt.legend()
     plt.show()
 
