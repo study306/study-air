@@ -211,65 +211,91 @@ sampling_filtering_example_2 = '''
 import numpy as np
 import matplotlib.pyplot as plt
 
-def inverse_kinematics_3dof(x, y, theta_total, l1, l2, l3):
+g = 9.81
 
-    x_prime = x - l3 * np.cos(theta_total)
-    y_prime = y - l3 * np.sin(theta_total)
+m1 = float(input("Enter mass of Link 1 (kg): "))
+m2 = float(input("Enter mass of Link 2 (kg): "))
+m_load = float(input("Enter mass of Load (kg): "))
+L1 = float(input("Enter length of Link 1 (m): "))
+L2 = float(input("Enter length of Link 2 (m): "))
 
-    d = np.sqrt(x_prime**2 + y_prime**2)
-    if d > l1 + l2 or d < abs(l1 - l2):
-        raise ValueError("Target is out of reach for the robot arm.")
+thetal_range = np.linspace(0, 180, 180)
+theta2_range = np.linspace(0, 180, 180)
 
-    theta1 = np.arctan2(y_prime, x_prime) - np.arccos((l1**2 + d**2 - l2**2) / (2 * l1 * d))
-    theta2 = np.arccos((l1**2 + l2**2 - d**2) / (2 * l1 * l2)) - np.pi
-    theta3 = theta_total - (theta1 + theta2)
+taul_values = []
+tau2_values = []
+Fg1_values = []
+Fg2_values = []
+F_ext_values = []
 
-    return theta1, theta2, theta3
+def calculate_forces_and_torques(thetal, theta2):
 
-x = float(input("Enter the x-coordinate of the target point: "))
-y = float(input("Enter the y-coordinate of the target point: "))
-theta_total_deg = float(input("Enter the total angle of the end-effector with respect to the base (in degrees): "))
+    thetal_rad = np.radians(thetal)
+    theta2_rad = np.radians(theta2)
 
-theta_total = np.radians(theta_total_deg)
+    Fg1 = m1 * g
+    Fg2 = m2 * g
+    F_ext = m_load * g
 
-l1 = float(input("Enter the length of the first link: "))
-l2 = float(input("Enter the length of the second link: "))
-l3 = float(input("Enter the length of the third link: "))
+    tau2 = Fg2 * (L2 / 2) * np.sin(theta2_rad) + F_ext * L2 * np.sin(theta2_rad)
 
-try:
-    theta1, theta2, theta3 = inverse_kinematics_3dof(x, y, theta_total, l1, l2, l3)
-    theta1_deg = np.degrees(theta1)
-    theta2_deg = np.degrees(theta2)
-    theta3_deg = np.degrees(theta3)
+    taul = (
+        Fg1 * (L1 / 2) * np.sin(thetal_rad)
+        + Fg2 * L1 * np.sin(thetal_rad)
+        + Fg2 * (L2 / 2) * np.sin(thetal_rad + theta2_rad)
+        + F_ext * (L1 + L2) * np.sin(thetal_rad + theta2_rad)
+    )
 
-    print(f"Joint angle θ1: {theta1_deg:.2f} degrees")
-    print(f"Joint angle θ2: {theta2_deg:.2f} degrees")
-    print(f"Joint angle θ3: {theta3_deg:.2f} degrees")
+    return Fg1, Fg2, F_ext, taul, tau2
 
-    x1 = l1 * np.cos(theta1)
-    y1 = l1 * np.sin(theta1)
-    x2 = x1 + l2 * np.cos(theta1 + theta2)
-    y2 = y1 + l2 * np.sin(theta1 + theta2)
-    x3 = x2 + l3 * np.cos(theta1 + theta2 + theta3)
-    y3 = y2 + l3 * np.sin(theta1 + theta2 + theta3)
+for thetal in thetal_range:
+    for theta2 in theta2_range:
+        Fg1, Fg2, F_ext, taul, tau2 = calculate_forces_and_torques(thetal, theta2)
+        Fg1_values.append(Fg1)
+        Fg2_values.append(Fg2)
+        F_ext_values.append(F_ext)
+        taul_values.append(taul)
+        tau2_values.append(tau2)
 
-    plt.figure(figsize=(8, 8))
-    plt.plot([0, x1], [0, y1], 'r-', linewidth=3, label='Link 1')
-    plt.plot([x1, x2], [y1, y2], 'g-', linewidth=3, label='Link 2')
-    plt.plot([x2, x3], [y2, y3], 'b-', linewidth=3, label='Link 3')
-    plt.scatter([0, x1, x2, x3], [0, y1, y2, y3], c='k', zorder=5)
-    plt.plot(x, y, 'ro', markersize=8, label='Target Point')
-    plt.xlabel("X")
-    plt.ylabel("Y")
-    plt.title("Inverse Kinematics of a 3-DOF Robot Arm")
-    plt.grid(True)
-    plt.axis("equal")
-    plt.legend()
-    plt.show()
-except ValueError as e:
-    print(e)
+taul_values = np.array(taul_values)
+tau2_values = np.array(tau2_values)
+Fg1_values = np.array(Fg1_values)
+Fg2_values = np.array(Fg2_values)
+F_ext_values = np.array(F_ext_values)
 
-print("Result: The inverse kinematics of the 3-DOF robot arm was computed successfully.")
+plt.figure(figsize=(12, 10))
+
+plt.subplot(2, 2, 1)
+plt.plot(thetal_range, taul_values[:len(thetal_range)], label=r'$\tau_1$ (Torque at Joint 1)')
+plt.xlabel(r'$\theta_1$ (degrees)')
+plt.ylabel("Torque (Nm)")
+plt.title("Torque at Joint 1 vs. Joint Angle")
+plt.legend()
+
+plt.subplot(2, 2, 2)
+plt.plot(thetal_range, Fg1_values[:len(thetal_range)], label=r'$F_{g1}$ (Force on Link 1)')
+plt.xlabel(r'$\theta_1$ (degrees)')
+plt.ylabel('Force (N)')
+plt.title('Gravitational Force on Link 1 vs. Joint Angle')
+plt.legend()
+
+plt.subplot(2, 2, 3)
+plt.plot(theta2_range, tau2_values[:len(theta2_range)], label=r'$\tau_2$ (Torque at Joint 2)')
+plt.xlabel(r'$\theta_2$ (degrees)')
+plt.ylabel("Torque (Nm)")
+plt.title("Torque at Joint 2 vs. Joint Angle")
+plt.legend()
+
+plt.subplot(2, 2, 4)
+plt.plot(theta2_range, Fg2_values[:len(theta2_range)], label=r'$F_{g2}$ (Force on Link 2)')
+plt.plot(theta2_range, F_ext_values[:len(theta2_range)], label=r'$F_{\text{ext}}$ (Force on Load)')
+plt.xlabel(r'$\theta_2$ (degrees)')
+plt.ylabel('Force (N)')
+plt.title('Gravitational Forces on Link 2 and Load vs. Joint Angle')
+plt.legend()
+
+plt.tight_layout()
+plt.show()
 '''
 
 sampling_filtering_example_3 = '''
@@ -538,10 +564,10 @@ elif selected_experiment == "3 Dof forward":
     display_code(sampling_filtering_example_1)
 elif selected_experiment == "3 Dof Inverse":
     st.header("3 Dof Inverse")
-    display_code(sampling_filtering_example_2)
+    display_code(sampling_filtering_example_3)
 elif selected_experiment == "Torque":
     st.header("Torque and Force")
-    display_code(sampling_filtering_example_3)
+    display_code(sampling_filtering_example_2)
 elif selected_experiment == "ros_setup":
     st.header("ROS Setup code")
     display_code(ros_set_up)
